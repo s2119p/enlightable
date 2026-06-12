@@ -4,7 +4,7 @@
 
 # --- Configuration ---
 # CHANGE THIS to your raw GitHub URL so the script can update itself
-GITHUB_URL="https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO_NAME/main/unified-motd.sh"
+GITHUB_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 SCRIPT_PATH="/etc/profile.d/99-unified-motd.sh"
 
 # --- ANSI Colors ---
