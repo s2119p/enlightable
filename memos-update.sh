@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO="usememos/memos"
-BIN_DIR="/usr/local/bin"
+BIN_DIR="/usr/bin"
 BIN="$BIN_DIR/memos"
 DATA_DIR="/var/opt/memos"
 VERSION_FILE="$DATA_DIR/.version"
@@ -114,7 +114,7 @@ fi
 
 LATEST_VERSION="$LATEST_TAG"
 
-# 7. Compare Versions
+# 7. Version Comparison
 CLEAN_CURRENT=$(printf '%s\n' "$CURRENT_VERSION" | sed 's/^v//')
 CLEAN_LATEST=$(printf '%s\n' "$LATEST_VERSION" | sed 's/^v//')
 
@@ -123,22 +123,39 @@ if [ "$CLEAN_CURRENT" = "$CLEAN_LATEST" ]; then
   exit 0
 fi
 
-# 8. Determine Architecture
+# 8. Set Up Flexible Architecture Filters
 ARCH=$(uname -m)
+OS_TERM="linux"
+
 case "$ARCH" in
-  x86_64) SEARCH_TERM="memos-linux-amd64" ;;
-  aarch64|arm64) SEARCH_TERM="memos-linux-arm64" ;;
-  *) echo "Error: Unsupported architecture $ARCH"; exit 1 ;;
+  x86_64)
+    ARCH_TERM1="amd64"
+    ARCH_TERM2="x86_64"
+    ;;
+  aarch64|arm64)
+    ARCH_TERM1="arm64"
+    ARCH_TERM2="aarch64"
+    ;;
+  *)
+    echo "Error: Unsupported architecture $ARCH"
+    exit 1
+    ;;
 esac
 
-echo "Updating to $LATEST_VERSION ($SEARCH_TERM)..."
+echo "Updating to $LATEST_VERSION ($ARCH)..."
 
-# 9. Resolve Download URL
+# 9. Dynamic Substring Match for the Asset URL
 i=0
 ASSET_URL=""
 while [ $i -lt $RETRIES ] && [ -z "$ASSET_URL" ]; do
-  # Match assets containing the search term, excluding validation files like .sha256 or .txt
-  ASSET_URL=$(jq -r --arg term "$SEARCH_TERM" '.assets[] | select(.name | test($term)) | select(.name | test("\\.(sha256|md5|txt)$") | not) | .browser_download_url' "$TMP_DIR/release.json" 2>/dev/null | head -n1 || true)
+  ASSET_URL=$(jq -r --arg os "$OS_TERM" --arg arch1 "$ARCH_TERM1" --arg arch2 "$ARCH_TERM2" '
+    .assets[] 
+    | select(
+        (.name | ascii_downcase | test($os)) and 
+        ((.name | ascii_downcase | test($arch1)) or (.name | ascii_downcase | test($arch2))) and 
+        (.name | test("\\.(sha256|md5|txt|sig|pem)$") | not)
+      ) 
+    | .browser_download_url' "$TMP_DIR/release.json" 2>/dev/null | head -n1 || true)
   i=$((i+1))
   [ -n "$ASSET_URL" ] || sleep 1
 done
@@ -146,7 +163,9 @@ done
 echo "Resolved ASSET_URL: '$ASSET_URL'"
 
 if [ -z "$ASSET_URL" ]; then
-  echo "Error: Could not find matching release asset for '$SEARCH_TERM'."
+  echo "Error: Could not find matching release asset for OS '$OS_TERM' and architecture '$ARCH'."
+  echo "Available assets in this release:"
+  jq -r '.assets[] | "- \(.name)"' "$TMP_DIR/release.json" 2>/dev/null || true
   exit 1
 fi
 
