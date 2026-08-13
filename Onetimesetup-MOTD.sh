@@ -41,3 +41,15 @@ EOF'
 
 # 4. Make executable
 $SUDO chmod +x /etc/profile.d/99-motd.sh
+# Ensure non-login desktop terminals (Tuxedo, Ubuntu, Debian GUI) also load the MOTD
+if [ -f "$HOME/.bashrc" ]; then
+    if ! grep -q "99-motd.sh" "$HOME/.bashrc"; then
+        echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$HOME/.bashrc"
+    fi
+fi
+
+if [ -f "$HOME/.zshrc" ]; then
+    if ! grep -q "99-motd.sh" "$HOME/.zshrc"; then
+        echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$HOME/.zshrc"
+    fi
+fi
