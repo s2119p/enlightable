@@ -21,22 +21,24 @@ LOCAL_CACHE="/var/tmp/github_motd.sh"
 if [ -f "$LOCAL_CACHE" ]; then
     . "$LOCAL_CACHE"
 fi
-
-# 2. Fetch latest version from GitHub in background (3s timeout)
+# NEW: Double subshell (prevents "[1]+ Done" messages)
 (
-    if command -v curl >/dev/null 2>&1; then
-        curl -s --max-time 3 "$RAW_URL" -o "${LOCAL_CACHE}.tmp"
-    elif command -v wget >/dev/null 2>&1; then
-        wget -q -T 3 "$RAW_URL" -O "${LOCAL_CACHE}.tmp"
-    fi
+    (
+        if command -v curl >/dev/null 2>&1; then
+            curl -s --max-time 3 "$RAW_URL" -o "${LOCAL_CACHE}.tmp"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q -T 3 "$RAW_URL" -O "${LOCAL_CACHE}.tmp"
+        fi
 
-    if [ -s "${LOCAL_CACHE}.tmp" ]; then
-        mv "${LOCAL_CACHE}.tmp" "$LOCAL_CACHE"
-        chmod +x "$LOCAL_CACHE"
-    else
-        rm -f "${LOCAL_CACHE}.tmp"
-    fi
-) >/dev/null 2>&1 &
+        if [ -s "${LOCAL_CACHE}.tmp" ]; then
+            mv "${LOCAL_CACHE}.tmp" "$LOCAL_CACHE"
+            chmod +x "$LOCAL_CACHE"
+        else
+            rm -f "${LOCAL_CACHE}.tmp"
+        fi
+    ) >/dev/null 2>&1 &
+)
+
 EOF'
 
 # 4. Make executable
