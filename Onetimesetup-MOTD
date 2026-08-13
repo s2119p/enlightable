@@ -14,7 +14,7 @@ $SUDO sh -c '> /etc/motd' 2>/dev/null || true
 # 3. Create the auto-sync launcher script
 $SUDO sh -c 'cat << "EOF" > /etc/profile.d/99-motd.sh
 #!/bin/sh
-RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/motd.sh"
+RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
 
 # 1. Execute local cached version immediately if available
