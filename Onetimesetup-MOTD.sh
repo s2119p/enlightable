@@ -14,6 +14,13 @@ $SUDO sh -c '> /etc/motd' 2>/dev/null || true
 # 3. Create the auto-sync launcher script
 $SUDO sh -c 'cat << "EOF" > /etc/profile.d/99-motd.sh
 #!/bin/sh
+
+# Prevent duplicate execution in the same shell session
+if [ -n "$MOTD_SHOWN" ]; then
+    return 0 2>/dev/null || exit 0
+fi
+export MOTD_SHOWN=1
+
 RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
 
@@ -21,7 +28,8 @@ LOCAL_CACHE="/var/tmp/github_motd.sh"
 if [ -f "$LOCAL_CACHE" ]; then
     . "$LOCAL_CACHE"
 fi
-# NEW: Double subshell (prevents "[1]+ Done" messages)
+
+# 2. Fetch latest version from GitHub in background
 (
     (
         if command -v curl >/dev/null 2>&1; then
@@ -38,7 +46,6 @@ fi
         fi
     ) >/dev/null 2>&1 &
 )
-
 EOF'
 
 # 4. Make executable
