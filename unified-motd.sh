@@ -1,9 +1,13 @@
 #!/bin/sh
+
+# Prevent double execution in the same session (Debian/Proxmox/Ubuntu)
+[ -n "$MOTD_SHOWN" ] && return 2>/dev/null || true
+export MOTD_SHOWN=1
+
 # ==============================================================================
-# Universal Portable MOTD Script for Alpine, Debian, Ubuntu, Proxmox, etc.
+# Universal Portable MOTD Script
 # ==============================================================================
 
-# ANSI Color Codes (POSIX Octal Escapes)
 RESET='\033[0m'
 BLUE='\033[1;34m'
 CYAN='\033[1;36m'
