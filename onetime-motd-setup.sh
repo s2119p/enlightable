@@ -1,3 +1,5 @@
+#!/bin/sh
+
 # 1. Determine if elevated privileges are needed
 SUDO=""
 if [ "$(id -u)" -ne 0 ]; then
@@ -11,7 +13,18 @@ fi
 # 2. Clear static MOTD
 $SUDO sh -c '> /etc/motd' 2>/dev/null || true
 
-# 3. Create the auto-sync launcher script
+# 3. Download the initial copy of unified-motd.sh IMMEDIATELY
+RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
+LOCAL_CACHE="/var/tmp/github_motd.sh"
+
+if command -v curl >/dev/null 2>&1; then
+    $SUDO curl -sSL "$RAW_URL" -o "$LOCAL_CACHE"
+elif command -v wget >/dev/null 2>&1; then
+    $SUDO wget -q "$RAW_URL" -O "$LOCAL_CACHE"
+fi
+$SUDO chmod +x "$LOCAL_CACHE" 2>/dev/null || true
+
+# 4. Create the auto-sync launcher script
 $SUDO sh -c 'cat << "EOF" > /etc/profile.d/99-motd.sh
 #!/bin/sh
 
@@ -48,9 +61,10 @@ fi
 )
 EOF'
 
-# 4. Make executable
+# 5. Make executable
 $SUDO chmod +x /etc/profile.d/99-motd.sh
-# Ensure non-login desktop terminals (Tuxedo, Ubuntu, Debian GUI) also load the MOTD
+
+# 6. Ensure non-login desktop terminals (Tuxedo, Ubuntu, Debian GUI) also load the MOTD
 if [ -f "$HOME/.bashrc" ]; then
     if ! grep -q "99-motd.sh" "$HOME/.bashrc"; then
         echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$HOME/.bashrc"
