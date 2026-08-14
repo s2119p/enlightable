@@ -1,9 +1,4 @@
 #!/bin/sh
-
-# Prevent double execution in the same session (Debian/Proxmox/Ubuntu)
-[ -n "$MOTD_SHOWN" ] && return 2>/dev/null || true
-export MOTD_SHOWN=1
-
 # ==============================================================================
 # Universal Portable MOTD Script
 # ==============================================================================
