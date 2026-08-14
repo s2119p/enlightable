@@ -23,7 +23,7 @@ cat << "EOF" > "$MOTD_LAUNCHER"
 if [ -n "$MOTD_SHOWN" ]; then
     return 0 2>/dev/null || exit 0
 fi
-export MOTD_SHOWN=1
+MOTD_SHOWN=1
 
 RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
