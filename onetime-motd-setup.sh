@@ -1,31 +1,22 @@
 #!/bin/sh
 
-# 1. Determine if elevated privileges are needed
-SUDO=""
-if [ "$(id -u)" -ne 0 ]; then
-    if command -v sudo >/dev/null 2>&1; then
-        SUDO="sudo"
-    elif command -v doas >/dev/null 2>&1; then
-        SUDO="doas"
-    fi
-fi
-
-# 2. Clear static MOTD
-$SUDO sh -c '> /etc/motd' 2>/dev/null || true
-
-# 3. Download the initial copy of unified-motd.sh IMMEDIATELY
-RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
+MOTD_LAUNCHER="/etc/profile.d/99-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
+RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 
+# 1. Clear static MOTD
+> /etc/motd 2>/dev/null || true
+
+# 2. Download initial copy of unified-motd.sh immediately
 if command -v curl >/dev/null 2>&1; then
-    $SUDO curl -sSL "$RAW_URL" -o "$LOCAL_CACHE"
+    curl -sSL "$RAW_URL" -o "$LOCAL_CACHE"
 elif command -v wget >/dev/null 2>&1; then
-    $SUDO wget -q "$RAW_URL" -O "$LOCAL_CACHE"
+    wget -q "$RAW_URL" -O "$LOCAL_CACHE"
 fi
-$SUDO chmod +x "$LOCAL_CACHE" 2>/dev/null || true
+chmod 755 "$LOCAL_CACHE" 2>/dev/null || true
 
-# 4. Create the auto-sync launcher script
-$SUDO sh -c 'cat << "EOF" > /etc/profile.d/99-motd.sh
+# 3. Create the auto-sync launcher script
+cat << "EOF" > "$MOTD_LAUNCHER"
 #!/bin/sh
 
 # Prevent duplicate execution in the same shell session
@@ -53,26 +44,33 @@ fi
 
         if [ -s "${LOCAL_CACHE}.tmp" ]; then
             mv "${LOCAL_CACHE}.tmp" "$LOCAL_CACHE"
-            chmod +x "$LOCAL_CACHE"
+            chmod 755 "$LOCAL_CACHE"
         else
             rm -f "${LOCAL_CACHE}.tmp"
         fi
     ) >/dev/null 2>&1 &
 )
-EOF'
+EOF
 
-# 5. Make executable
-$SUDO chmod +x /etc/profile.d/99-motd.sh
+chmod 755 "$MOTD_LAUNCHER"
 
-# 6. Ensure non-login desktop terminals (Tuxedo, Ubuntu, Debian GUI) also load the MOTD
-if [ -f "$HOME/.bashrc" ]; then
-    if ! grep -q "99-motd.sh" "$HOME/.bashrc"; then
-        echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$HOME/.bashrc"
+# 4. Helper function to configure .bashrc / .zshrc
+add_to_rc() {
+    rc_file="$1"
+    if [ -f "$rc_file" ]; then
+        if ! grep -q "99-motd.sh" "$rc_file"; then
+            echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$rc_file"
+        fi
     fi
-fi
+}
 
-if [ -f "$HOME/.zshrc" ]; then
-    if ! grep -q "99-motd.sh" "$HOME/.zshrc"; then
-        echo '[ -f /etc/profile.d/99-motd.sh ] && . /etc/profile.d/99-motd.sh' >> "$HOME/.zshrc"
-    fi
+# Configure current environment user
+add_to_rc "$HOME/.bashrc"
+add_to_rc "$HOME/.zshrc"
+
+# Configure the sudo user's home directory (e.g. /home/sudhir)
+if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+    USER_HOME=$(eval echo "~$SUDO_USER")
+    add_to_rc "$USER_HOME/.bashrc"
+    add_to_rc "$USER_HOME/.zshrc"
 fi
