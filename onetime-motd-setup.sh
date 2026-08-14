@@ -1,4 +1,7 @@
 #!/bin/sh
+# ==============================================================================
+# Master One-Time MOTD Installer for Alpine, Debian, Ubuntu, Tuxedo OS, Proxmox
+# ==============================================================================
 
 MOTD_LAUNCHER="/etc/profile.d/99-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
@@ -15,15 +18,15 @@ elif command -v wget >/dev/null 2>&1; then
 fi
 chmod 755 "$LOCAL_CACHE" 2>/dev/null || true
 
-# 3. Create the auto-sync launcher script
+# 3. Create the auto-sync launcher script with PID ($$) Guard
 cat << "EOF" > "$MOTD_LAUNCHER"
 #!/bin/sh
 
-# Prevent duplicate execution in the same shell session
-if [ -n "$MOTD_SHOWN" ]; then
+# Prevent duplicate execution in the same shell process ($$)
+if [ "$MOTD_SHOWN" = "$$" ]; then
     return 0 2>/dev/null || exit 0
 fi
-MOTD_SHOWN=1
+MOTD_SHOWN="$$"
 
 RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
@@ -64,11 +67,11 @@ add_to_rc() {
     fi
 }
 
-# Configure current environment user
+# Configure current user and root
 add_to_rc "$HOME/.bashrc"
 add_to_rc "$HOME/.zshrc"
 
-# Configure the sudo user's home directory (e.g. /home/sudhir)
+# Configure sudo user's home directory if applicable
 if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
     USER_HOME=$(eval echo "~$SUDO_USER")
     add_to_rc "$USER_HOME/.bashrc"
