@@ -1,31 +1,15 @@
 #!/bin/sh
 # ==============================================================================
-# Universal MOTD with Nepal Flag (np-flag.png & Pure ANSI Fallback)
+# Pure POSIX Lightweight MOTD with Classic Tux (Zero Dependencies)
 # ==============================================================================
 
 # ANSI Color Codes
 RESET='\033[0m'
-BLUE='\033[1;34m'
 CYAN='\033[1;36m'
-GREEN='\033[1;32m'
-RED='\033[1;31m'
 WHITE='\033[1;37m'
+YELLOW='\033[1;33m'
+DARK='\033[1;30m'
 GRAY='\033[0;37m'
-
-# Image Cache & GitHub Raw URL
-FLAG_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/my/np-flag.png"
-FLAG_CACHE="/var/tmp/np-flag.png"
-
-# Download np-flag.png in background if missing
-if [ ! -f "$FLAG_CACHE" ]; then
-    (
-        if command -v curl >/dev/null 2>&1; then
-            curl -sSLf "$FLAG_URL" -o "$FLAG_CACHE"
-        elif command -v wget >/dev/null 2>&1; then
-            wget -q "$FLAG_URL" -O "$FLAG_CACHE"
-        fi
-    ) >/dev/null 2>&1 &
-fi
 
 # 1. System Information Gathering
 HOSTNAME=$(hostname)
@@ -119,31 +103,21 @@ DISK_PERC=$(df -h / | awk 'NR==2 {print $5}')
 USERS_COUNT=$(who 2>/dev/null | wc -l | xargs)
 
 # ==============================================================================
-# Flag Display: Chafa (HD Image Render) or Pure ANSI Fallback
+# Display Header: Tux Penguin (Left) + Primary Host Info (Right)
 # ==============================================================================
-if command -v chafa >/dev/null 2>&1 && [ -f "$FLAG_CACHE" ]; then
-    # Render actual np-flag.png via chafa in full color
-    chafa --size=22x12 "$FLAG_CACHE"
-else
-    # Pure POSIX Colored Nepal Flag Fallback (Safe printf escaping)
-    printf "%b |\\%b\n" "$BLUE" "$RESET"
-    printf "%b |%b* %b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b*%b☽%b*%b\\%b\n" "$BLUE" "$RED" "$WHITE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b****%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b------%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b*%b☼%b****%b\\%b\n" "$BLUE" "$RED" "$WHITE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b*******%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
-    printf "%b |%b---------%b\n" "$BLUE" "$BLUE" "$RESET"
-    printf "%b |%b\n" "$BLUE" "$RESET"
-fi
+printf "${WHITE}   .--.       ${WHITE}%s${RESET}\n" "$HOSTNAME"
+printf "${WHITE}  |${WHITE}o${DARK}_${WHITE}o ${WHITE}|      ${CYAN}OS:${RESET} %s (%s)\n" "$OS_NAME" "$ARCH"
+printf "${WHITE}  |${YELLOW}:_/${WHITE} |      ${CYAN}Kernel:${RESET} %s\n" "$KERNEL"
+printf "${WHITE} //   \\ \\     ${CYAN}IP:${RESET} %s (%s)\n" "$IP_ADDR" "${NET_IF:-eth0}"
+printf "${WHITE}(|     | )${RESET}\n"
+printf "${YELLOW}/'\\${WHITE}_   _${YELLOW}/'\`\\${RESET}\n"
+printf "${YELLOW}\\___)=(___/${RESET}\n"
 
-# System Information Block
+# ==============================================================================
+# Display System Status Block
+# ==============================================================================
 printf "${GRAY}--------------------------------------------------${RESET}\n"
 printf " ${WHITE}System Status:${RESET}\n"
-printf "   ${CYAN}Hostname:${RESET}     %s\n" "$HOSTNAME"
-printf "   ${CYAN}OS:${RESET}           %s (%s)\n" "$OS_NAME" "$ARCH"
-printf "   ${CYAN}Kernel:${RESET}       %s\n" "$KERNEL"
-printf "   ${CYAN}IP Address:${RESET}   %s (%s)\n" "$IP_ADDR" "${NET_IF:-eth0}"
 printf "   ${CYAN}CPU Info:${RESET}     %s Cores @ %s\n" "$CPU_CORES" "$CPU_FREQ"
 printf "   ${CYAN}CPU Temp:${RESET}     %s\n" "$CPU_TEMP"
 printf "   ${CYAN}Uptime:${RESET}       %s (Booted: %s)\n" "$UPTIME_STR" "$BOOT_TIME"
