@@ -5,7 +5,7 @@
 
 MOTD_LAUNCHER="/etc/profile.d/99-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
-RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
+RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/my/unified-motd.sh"
 
 # 1. Clear static MOTD
 > /etc/motd 2>/dev/null || true
@@ -28,7 +28,7 @@ if [ "$MOTD_SHOWN" = "$$" ]; then
 fi
 MOTD_SHOWN="$$"
 
-RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/unified-motd.sh"
+RAW_URL="https://raw.githubusercontent.com/s2119p/enlightable/my/unified-motd.sh"
 LOCAL_CACHE="/var/tmp/github_motd.sh"
 
 # 1. Execute local cached version immediately if available
