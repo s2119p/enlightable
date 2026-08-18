@@ -119,22 +119,22 @@ DISK_PERC=$(df -h / | awk 'NR==2 {print $5}')
 USERS_COUNT=$(who 2>/dev/null | wc -l | xargs)
 
 # ==============================================================================
-# Flag Display: Chafa (Image Render) or Pure ANSI Fallback
+# Flag Display: Chafa (HD Image Render) or Pure ANSI Fallback
 # ==============================================================================
 if command -v chafa >/dev/null 2>&1 && [ -f "$FLAG_CACHE" ]; then
-    # Render actual np-flag.png via chafa
-    chafa --size=20x10 "$FLAG_CACHE"
+    # Render actual np-flag.png via chafa in full color
+    chafa --size=22x12 "$FLAG_CACHE"
 else
-    # Pure POSIX Colored Nepal Flag Fallback
-    printf "${BLUE} |\\${RESET}\n"
-    printf "${BLUE} |${RED}* ${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${RED}*${WHITE}☽${RED}*${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${RED}****${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${RED}------${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${RED}*${WHITE}☼${RED}****${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${RED}*******${BLUE}\\${RESET}\n"
-    printf "${BLUE} |${BLUE}---------\n"
-    printf "${BLUE} |${RESET}\n"
+    # Pure POSIX Colored Nepal Flag Fallback (Safe printf escaping)
+    printf "%b |\\%b\n" "$BLUE" "$RESET"
+    printf "%b |%b* %b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b*%b☽%b*%b\\%b\n" "$BLUE" "$RED" "$WHITE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b****%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b------%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b*%b☼%b****%b\\%b\n" "$BLUE" "$RED" "$WHITE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b*******%b\\%b\n" "$BLUE" "$RED" "$BLUE" "$RESET"
+    printf "%b |%b---------%b\n" "$BLUE" "$BLUE" "$RESET"
+    printf "%b |%b\n" "$BLUE" "$RESET"
 fi
 
 # System Information Block
