@@ -1,8 +1,9 @@
 #!/bin/sh
 # ==============================================================================
-# Universal Portable MOTD Script
+# Universal MOTD with Nepal Flag (np-flag.png & Pure ANSI Fallback)
 # ==============================================================================
 
+# ANSI Color Codes
 RESET='\033[0m'
 BLUE='\033[1;34m'
 CYAN='\033[1;36m'
@@ -11,7 +12,22 @@ RED='\033[1;31m'
 WHITE='\033[1;37m'
 GRAY='\033[0;37m'
 
-# 1. OS & Hostname Detection
+# Image Cache & GitHub Raw URL
+FLAG_URL="https://raw.githubusercontent.com/s2119p/enlightable/main/my/np-flag.png"
+FLAG_CACHE="/var/tmp/np-flag.png"
+
+# Download np-flag.png in background if missing
+if [ ! -f "$FLAG_CACHE" ]; then
+    (
+        if command -v curl >/dev/null 2>&1; then
+            curl -sSLf "$FLAG_URL" -o "$FLAG_CACHE"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -q "$FLAG_URL" -O "$FLAG_CACHE"
+        fi
+    ) >/dev/null 2>&1 &
+fi
+
+# 1. System Information Gathering
 HOSTNAME=$(hostname)
 KERNEL=$(uname -r)
 ARCH=$(uname -m)
@@ -23,12 +39,12 @@ else
     OS_NAME="$(uname -s) $(uname -r)"
 fi
 
-# 2. Network IP & Interface (Portable across all Linux distros)
+# 2. Network IP & Interface
 NET_IF=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="dev") print $(i+1)}')
 IP_ADDR=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}')
 [ -z "$IP_ADDR" ] && IP_ADDR=$(ip -4 addr show | awk '/inet / {print $2}' | cut -d/ -f1 | grep -v '^127\.' | xargs)
 
-# 3. Uptime & Boot Time (Reading /proc/uptime works on ALL distros)
+# 3. Uptime & Boot Time
 UPTIME_SEC=$(cut -d. -f1 /proc/uptime)
 DAYS=$(( UPTIME_SEC / 86400 ))
 HOURS=$(( (UPTIME_SEC % 86400) / 3600 ))
@@ -56,7 +72,7 @@ else
     CPU_FREQ="N/A"
 fi
 
-# 5. Temperature Detection (Multi-path scanner for x86, ARM, Proxmox, Raspberry Pi)
+# 5. Temperature Detection
 CPU_TEMP="N/A"
 for temp_file in \
     /sys/class/thermal/thermal_zone0/temp \
@@ -71,7 +87,7 @@ for temp_file in \
     fi
 done
 
-# 6. Portable Memory Usage (Reading /proc/meminfo)
+# 6. Memory Usage
 MEM_TOTAL_KB=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
 MEM_AVAIL_KB=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
 if [ -n "$MEM_TOTAL_KB" ] && [ -n "$MEM_AVAIL_KB" ]; then
@@ -83,7 +99,7 @@ else
     MEM_TOTAL_MB="N/A"; MEM_USED_MB="N/A"; MEM_PERC="N/A"
 fi
 
-# 7. Portable Swap Usage
+# 7. Swap Usage
 SWAP_TOTAL_KB=$(awk '/SwapTotal:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 SWAP_FREE_KB=$(awk '/SwapFree:/ {print $2}' /proc/meminfo 2>/dev/null || echo 0)
 if [ -n "$SWAP_TOTAL_KB" ] && [ "$SWAP_TOTAL_KB" -gt 0 ]; then
@@ -94,7 +110,7 @@ else
     SWAP_INFO="Disabled"
 fi
 
-# 8. Disk Usage (Root partition)
+# 8. Disk Usage
 DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
 DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
 DISK_PERC=$(df -h / | awk 'NR==2 {print $5}')
@@ -103,14 +119,31 @@ DISK_PERC=$(df -h / | awk 'NR==2 {print $5}')
 USERS_COUNT=$(who 2>/dev/null | wc -l | xargs)
 
 # ==============================================================================
-# Print Output
+# Flag Display: Chafa (Image Render) or Pure ANSI Fallback
 # ==============================================================================
-printf "${BLUE}   /\\        ${WHITE}%s${BLUE}\n" "$HOSTNAME"
-printf "  /  \\       ${CYAN}OS:${RESET} %s (%s)\n" "$OS_NAME" "$ARCH"
-printf " / /\\ \\      ${CYAN}Kernel:${RESET} %s\n" "$KERNEL"
-printf "/ /  \\ \\     ${CYAN}IP:${RESET} %s (%s)\n${RESET}" "$IP_ADDR" "${NET_IF:-eth0}"
+if command -v chafa >/dev/null 2>&1 && [ -f "$FLAG_CACHE" ]; then
+    # Render actual np-flag.png via chafa
+    chafa --size=20x10 "$FLAG_CACHE"
+else
+    # Pure POSIX Colored Nepal Flag Fallback
+    printf "${BLUE} |\\${RESET}\n"
+    printf "${BLUE} |${RED}* ${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${RED}*${WHITE}☽${RED}*${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${RED}****${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${RED}------${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${RED}*${WHITE}☼${RED}****${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${RED}*******${BLUE}\\${RESET}\n"
+    printf "${BLUE} |${BLUE}---------\n"
+    printf "${BLUE} |${RESET}\n"
+fi
+
+# System Information Block
 printf "${GRAY}--------------------------------------------------${RESET}\n"
 printf " ${WHITE}System Status:${RESET}\n"
+printf "   ${CYAN}Hostname:${RESET}     %s\n" "$HOSTNAME"
+printf "   ${CYAN}OS:${RESET}           %s (%s)\n" "$OS_NAME" "$ARCH"
+printf "   ${CYAN}Kernel:${RESET}       %s\n" "$KERNEL"
+printf "   ${CYAN}IP Address:${RESET}   %s (%s)\n" "$IP_ADDR" "${NET_IF:-eth0}"
 printf "   ${CYAN}CPU Info:${RESET}     %s Cores @ %s\n" "$CPU_CORES" "$CPU_FREQ"
 printf "   ${CYAN}CPU Temp:${RESET}     %s\n" "$CPU_TEMP"
 printf "   ${CYAN}Uptime:${RESET}       %s (Booted: %s)\n" "$UPTIME_STR" "$BOOT_TIME"
