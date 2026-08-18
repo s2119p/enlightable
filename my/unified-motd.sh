@@ -105,13 +105,13 @@ USERS_COUNT=$(who 2>/dev/null | wc -l | xargs)
 # ==============================================================================
 # Display Header: Tux Penguin (Left) + Primary Host Info (Right)
 # ==============================================================================
-printf "${WHITE}   .--.       ${WHITE}%s${RESET}\n" "$HOSTNAME"
-printf "${WHITE}  |${WHITE}o${DARK}_${WHITE}o ${WHITE}|      ${CYAN}OS:${RESET} %s (%s)\n" "$OS_NAME" "$ARCH"
-printf "${WHITE}  |${YELLOW}:_/${WHITE} |      ${CYAN}Kernel:${RESET} %s\n" "$KERNEL"
-printf "${WHITE} //   \\ \\     ${CYAN}IP:${RESET} %s (%s)\n" "$IP_ADDR" "${NET_IF:-eth0}"
-printf "${WHITE}(|     | )${RESET}\n"
-printf "${YELLOW}/'\\${WHITE}_   _${YELLOW}/'\`\\${RESET}\n"
-printf "${YELLOW}\\___)=(___/${RESET}\n"
+printf "%b   .--.       %b%s%b\n" "$WHITE" "$WHITE" "$HOSTNAME" "$RESET"
+printf "%b  |%bo%b_%bo %b|      %bOS:%b %s (%s)\n" "$WHITE" "$WHITE" "$DARK" "$WHITE" "$WHITE" "$CYAN" "$RESET" "$OS_NAME" "$ARCH"
+printf "%b  |%b:_/%b |      %bKernel:%b %s\n" "$WHITE" "$YELLOW" "$WHITE" "$CYAN" "$RESET" "$KERNEL"
+printf "%b //   \\ \\     %bIP:%b %s (%s)\n" "$WHITE" "$CYAN" "$RESET" "$IP_ADDR" "${NET_IF:-eth0}"
+printf "%b(|     | )%b\n" "$WHITE" "$RESET"
+printf "%b/'\\_   _/'\`\\%b\n" "$YELLOW" "$RESET"
+printf "%b\\___)=(___/%b\n" "$YELLOW" "$RESET"
 
 # ==============================================================================
 # Display System Status Block
