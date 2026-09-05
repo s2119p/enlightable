@@ -1,15 +1,16 @@
 #!/bin/sh
 
-# 1. Turn off history recording for the active session
+# 1. Unset and redirect history file to /dev/null
+export HISTFILE=/dev/null
+unset HISTSIZE
+
+# 2. Disable history if the shell supports it (bash/zsh)
 set +o history 2>/dev/null || true
 
-# 2. Redirect HISTFILE to /dev/null so no buffer writes on exit
-export HISTFILE=/dev/null
+# 3. Wipe physical history files for ash, bash, and zsh
+rm -f "$HOME/.ash_history" "$HOME/.bash_history" "$HOME/.zsh_history" "$HOME/.history" 2>/dev/null || true
 
-# 3. Wipe standard history files (covers ash, bash, zsh)
-rm -f "$HOME/.ash_history" "$HOME/.bash_history" "$HOME/.zsh_history" "$HOME/.history"
-
-# 4. Clear active in-memory history buffer
+# 4. Clear in-memory buffer if supported
 history -c 2>/dev/null || true
 
-printf "\033[0;32m[✓] Terminal history wiped and recording disabled.\033[0m\n"
+printf "\033[0;32m[✓] Alpine history wiped successfully.\033[0m\n"
