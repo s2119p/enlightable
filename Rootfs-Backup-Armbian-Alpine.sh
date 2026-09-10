@@ -1,87 +1,104 @@
 #!/bin/sh
 # ==============================================================================
-# Universal Root Backup Script for Alpine & Armbian / Debian
+# Universal Direct Stream Rootfs Backup (Alpine & Armbian / Debian)
+# Streams tar -> rclone rcat without saving any temporary files on local disk
 # ==============================================================================
 
 set -e
 
-# 1. Root privilege check
+# Helper to read from terminal even inside piped subshells
+prompt_read() {
+    prompt_text="$1"
+    default_val="$2"
+    printf "%s" "$prompt_text"
+    if [ -c /dev/tty ]; then
+        read -r input < /dev/tty
+    else
+        read -r input
+    fi
+    echo "${input:-$default_val}"
+}
+
+# 1. Root check
 if [ "$(id -u)" -ne 0 ]; then
-    echo "[-] Error: This script must be run as root to preserve file permissions." >&2
+    echo "[-] Error: This script must be run as root." >&2
     exit 1
 fi
 
-# 2. Detect OS Name
+# 2. Check if rclone is installed
+if ! command -v rclone >/dev/null 2>&1; then
+    echo "[-] Error: rclone is not installed. Please install rclone first." >&2
+    exit 1
+fi
+
+# 3. Detect OS
 if [ -f /etc/alpine-release ]; then
     OS_NAME="Alpine"
+    OS_TAG="alpine_rootfs"
 elif [ -f /etc/armbian-release ]; then
     OS_NAME="Armbian"
+    OS_TAG="armbian_rootfs"
 elif [ -f /etc/debian_version ]; then
     OS_NAME="Debian"
+    OS_TAG="debian_rootfs"
 else
     OS_NAME="Linux"
+    OS_TAG="linux_rootfs"
 fi
 
 HOSTNAME=$(hostname 2>/dev/null || echo "box")
 DATE=$(date +%Y-%m-%d_%H-%M)
 
 echo "============================================================"
-echo "    Universal System Root Backup (${OS_NAME})"
+echo "   Universal Direct Stream Backup (${OS_NAME})"
+echo "   (0 MB Local Disk Space Used - Direct Stream to Remote)"
 echo "============================================================"
 
-# 3. Choice: Source Directory
-printf "Enter Source directory to backup [Default: /]: "
-read -r INPUT_SRC
-SRC="${INPUT_SRC:-/}"
+# --- 4. Interactive Options ---
 
-# Ensure source exists
+# Option 1: Source directory
+SRC=$(prompt_read "1. Source directory to backup [Default: /]: " "/")
 if [ ! -d "$SRC" ]; then
     echo "[-] Error: Source directory '$SRC' does not exist!" >&2
     exit 1
 fi
 
-# 4. Choice: Destination Directory
-printf "Enter Destination directory to save backup [Default: /]: "
-read -r INPUT_DEST
-DEST="${INPUT_DEST:-/}"
-
-# Ensure destination exists or create it
-mkdir -p "$DEST"
-
-# 5. Choice: Include /boot
-printf "Include /boot in the backup? (y/N) [Default: N]: "
-read -r INPUT_BOOT
-case "$INPUT_BOOT" in
+# Option 2: Include /boot
+BOOT_CHOICE=$(prompt_read "2. Include /boot directory? (y/N) [Default: N]: " "N")
+case "$BOOT_CHOICE" in
     [yY][eE][sS]|[yY])
         INCLUDE_BOOT=1
+        BOOT_LABEL="BOOT"
         ;;
     *)
         INCLUDE_BOOT=0
+        BOOT_LABEL="NOBOOT"
         ;;
 esac
 
-# 6. Define output filename
-# Strip trailing slash from DEST if present
+# Option 3: Remote Destination (Rclone path)
+DEFAULT_DEST="LXCsamba:lnvo_Samba/lnvoBkp/LnvoBackup/${OS_TAG}"
+DEST=$(prompt_read "3. Enter Rclone remote path [Default: $DEFAULT_DEST]: " "$DEFAULT_DEST")
+
+# Clean destination trailing slash
 DEST_CLEAN=$(echo "$DEST" | sed 's:/*$::')
-FILENAME="${DEST_CLEAN}/${HOSTNAME}_${OS_NAME}_backup_${DATE}.tar.gz"
+ARCHIVE_NAME="${HOSTNAME}_${OS_NAME}_backup_${DATE}-${BOOT_LABEL}.tar.gz"
+TARGET_REMOTE="${DEST_CLEAN}/${ARCHIVE_NAME}"
 
 echo ""
-echo "--- Backup Configuration ---"
+echo "--- Stream Configuration ---"
 echo " OS:           $OS_NAME"
 echo " Source:       $SRC"
-echo " Destination:  $FILENAME"
-if [ "$INCLUDE_BOOT" -eq 1 ]; then
-    echo " Boot Folder:  INCLUDED"
-else
-    echo " Boot Folder:  EXCLUDED"
-fi
-echo "-----------------------------"
-echo "Starting backup process..."
+echo " Boot Folder:  $([ "$INCLUDE_BOOT" -eq 1 ] && echo 'INCLUDED' || echo 'EXCLUDED')"
+echo " Destination:  $TARGET_REMOTE"
+echo "----------------------------"
+echo "Starting direct network compression and stream..."
 
-# 7. Generate temporary exclude file
-EXCLUDES="/tmp/backup_excludes_$$.txt"
+# --- 5. Generate Exclusion List in /tmp (RAM) ---
+EXCLUDES="/tmp/stream_excludes_$$.txt"
+trap 'rm -f "$EXCLUDES"' EXIT INT TERM
 
-cat <<EOF > "$EXCLUDES"
+cat << 'EOF' > "$EXCLUDES"
 ./proc/*
 proc/*
 ./sys/*
@@ -105,22 +122,17 @@ lost+found
 *.tar.gz
 EOF
 
-# Exclude boot if user chose 'N'
+# Exclude boot if opted out
 if [ "$INCLUDE_BOOT" -eq 0 ]; then
     echo "./boot/*" >> "$EXCLUDES"
     echo "boot/*" >> "$EXCLUDES"
 fi
 
-# 8. Execute the backup
-# -p preserves permissions
-# --numeric-owner preserves exact UID/GIDs across different distros
-tar --numeric-owner -cvpzf "$FILENAME" -X "$EXCLUDES" -C "$SRC" .
+# --- 6. Direct Stream: tar -> rclone rcat ---
+tar --numeric-owner -cpzf - -X "$EXCLUDES" -C "$SRC" . | rclone rcat "$TARGET_REMOTE"
 
-# 9. Cleanup temporary files
-rm -f "$EXCLUDES"
-
+echo ""
 echo "------------------------------------------------------------"
-echo "Backup Complete!"
-echo "Size:     $(du -sh "$FILENAME" | awk '{print $1}')"
-echo "Location: $FILENAME"
+echo " Direct Stream Backup Complete!"
+echo " Remote Target: $TARGET_REMOTE"
 echo "------------------------------------------------------------"
