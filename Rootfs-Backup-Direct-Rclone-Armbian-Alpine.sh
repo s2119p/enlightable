@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==============================================================================
-# Universal Direct Stream Rootfs Backup (Alpine & Armbian / Debian)
-# Streams tar -> rclone rcat (0 MB Local Disk Cache)
+# Universal Direct-Stream Rootfs Backup (Alpine & Armbian / Debian)
+# Features: 0 MB Disk Cache, RAM Spooling, Interrupt Auto-Clean, Subshell Safe
 # ==============================================================================
 
 # 1. Root check
@@ -16,7 +16,7 @@ if ! command -v rclone >/dev/null 2>&1; then
     exit 1
 fi
 
-# 3. Detect OS
+# 3. Detect OS and Target Names
 if [ -f /etc/alpine-release ]; then
     OS_NAME="Alpine"
     OS_TAG="alpine_rootfs"
@@ -34,12 +34,40 @@ fi
 HOSTNAME=$(hostname 2>/dev/null || echo "box")
 DATE=$(date +%Y-%m-%d_%H-%M)
 
+# 4. Determine RAM-backed temporary directory (Prevents eMMC writes)
+if [ -d /dev/shm ]; then
+    RAM_TMP="/dev/shm"
+elif [ -d /run ]; then
+    RAM_TMP="/run"
+else
+    RAM_TMP="/tmp"
+fi
+
+EXCLUDES="${RAM_TMP}/backup_excludes_$$.txt"
+
+# 5. Trap interrupts (Ctrl+C / Kill) to wipe any residue instantly
+cleanup() {
+    exit_code=$?
+    trap - EXIT INT TERM HUP
+    echo ""
+    echo "[*] Cleaning temporary files and buffers..."
+    rm -f "$EXCLUDES"
+    rm -f "${RAM_TMP}/rclone-spool*" 2>/dev/null || true
+    rm -f /tmp/rclone-spool* 2>/dev/null || true
+    
+    if [ $exit_code -ne 0 ]; then
+        echo "[!] Backup aborted or interrupted. No disk residue left behind."
+    fi
+    exit $exit_code
+}
+trap cleanup EXIT INT TERM HUP
+
 echo "============================================================"
 echo "   Universal Direct Stream Backup (${OS_NAME})"
-echo "   (0 MB Local Disk Space Used - Direct Stream to Remote)"
+echo "   (RAM Spooling Active: ${RAM_TMP} | 0 MB Disk Cache)"
 echo "============================================================"
 
-# --- 4. Interactive Prompts (Displaying to screen properly) ---
+# --- 6. Interactive Prompts ---
 
 # Prompt 1: Source
 printf "1. Source directory to backup [Default: /]: "
@@ -74,7 +102,7 @@ case "$INPUT_BOOT" in
         ;;
 esac
 
-# Prompt 3: Remote Destination
+# Prompt 3: Remote Destination (Rclone path)
 DEFAULT_DEST="LXCsamba:lnvo_Samba/lnvoBkp/LnvoBackup/${OS_TAG}"
 printf "3. Enter Rclone remote path [Default: %s]: " "$DEFAULT_DEST"
 if [ -c /dev/tty ]; then
@@ -95,50 +123,76 @@ echo " OS:           $OS_NAME"
 echo " Source:       $SRC"
 echo " Boot Folder:  $([ "$INCLUDE_BOOT" -eq 1 ] && echo 'INCLUDED' || echo 'EXCLUDED')"
 echo " Destination:  $TARGET_REMOTE"
+echo " Temp Buffer:  $RAM_TMP (In-Memory)"
 echo "----------------------------"
 echo "Starting direct network compression and stream..."
 
-# --- 5. Generate RAM Exclude File ---
-EXCLUDES="/tmp/stream_excludes_$$.txt"
-
+# --- 7. Generate Watertight Exclusion List ---
 cat << 'EOF' > "$EXCLUDES"
+./proc
 ./proc/*
+proc
 proc/*
+./sys
 ./sys/*
+sys
 sys/*
+./dev
 ./dev/*
+dev
 dev/*
+./run
 ./run/*
+run
 run/*
+./tmp
 ./tmp/*
+tmp
 tmp/*
-./var/cache/*
-var/cache/*
-./var/tmp/*
-var/tmp/*
-./mnt/*
-mnt/*
+./media
 ./media/*
+media
 media/*
+./mnt
+./mnt/*
+mnt
+mnt/*
 ./lost+found
 lost+found
+./var/cache
+./var/cache/*
+var/cache/*
+./var/tmp
+./var/tmp/*
+var/tmp/*
+./root/.cache
+./root/.cache/*
+root/.cache/*
 *.tar.gz
 EOF
 
 # Exclude boot if opted out
 if [ "$INCLUDE_BOOT" -eq 0 ]; then
-    echo "./boot/*" >> "$EXCLUDES"
-    echo "boot/*" >> "$EXCLUDES"
+    cat << 'EOF' >> "$EXCLUDES"
+./boot
+./boot/*
+boot
+boot/*
+EOF
 fi
 
-# --- 6. Direct Stream: tar -> rclone rcat ---
-tar --numeric-owner -cvpzf - -X "$EXCLUDES" -C "$SRC" . | rclone rcat "$TARGET_REMOTE"
-
-# Cleanup
-rm -f "$EXCLUDES"
+# --- 8. Execute Direct Network Stream ---
+# -v writes live file progress to your screen (stderr)
+# stdout is piped directly into rclone rcat using RAM buffer
+tar --numeric-owner -cpvzf - -X "$EXCLUDES" -C "$SRC" . | \
+    rclone rcat \
+        --temp-dir "$RAM_TMP" \
+        --timeout 15s \
+        --contimeout 15s \
+        "$TARGET_REMOTE"
 
 echo ""
 echo "------------------------------------------------------------"
-echo " Direct Stream Backup Complete!"
+echo " [✓] Direct Stream Backup Complete!"
 echo " Remote Target: $TARGET_REMOTE"
 echo "------------------------------------------------------------"
