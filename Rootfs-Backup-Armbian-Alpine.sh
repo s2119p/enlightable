@@ -132,7 +132,7 @@ if [ "$INCLUDE_BOOT" -eq 0 ]; then
 fi
 
 # --- 6. Direct Stream: tar -> rclone rcat ---
-tar --numeric-owner -cpzf - -X "$EXCLUDES" -C "$SRC" . | rclone rcat "$TARGET_REMOTE"
+tar --numeric-owner -cvpzf - -X "$EXCLUDES" -C "$SRC" . | rclone rcat "$TARGET_REMOTE"
 
 # Cleanup
 rm -f "$EXCLUDES"
