@@ -1,23 +1,8 @@
 #!/bin/sh
 # ==============================================================================
 # Universal Direct Stream Rootfs Backup (Alpine & Armbian / Debian)
-# Streams tar -> rclone rcat without saving any temporary files on local disk
+# Streams tar -> rclone rcat (0 MB Local Disk Cache)
 # ==============================================================================
-
-set -e
-
-# Helper to read from terminal even inside piped subshells
-prompt_read() {
-    prompt_text="$1"
-    default_val="$2"
-    printf "%s" "$prompt_text"
-    if [ -c /dev/tty ]; then
-        read -r input < /dev/tty
-    else
-        read -r input
-    fi
-    echo "${input:-$default_val}"
-}
 
 # 1. Root check
 if [ "$(id -u)" -ne 0 ]; then
@@ -54,18 +39,31 @@ echo "   Universal Direct Stream Backup (${OS_NAME})"
 echo "   (0 MB Local Disk Space Used - Direct Stream to Remote)"
 echo "============================================================"
 
-# --- 4. Interactive Options ---
+# --- 4. Interactive Prompts (Displaying to screen properly) ---
 
-# Option 1: Source directory
-SRC=$(prompt_read "1. Source directory to backup [Default: /]: " "/")
+# Prompt 1: Source
+printf "1. Source directory to backup [Default: /]: "
+if [ -c /dev/tty ]; then
+    read -r INPUT_SRC < /dev/tty
+else
+    read -r INPUT_SRC
+fi
+SRC="${INPUT_SRC:-/}"
+
 if [ ! -d "$SRC" ]; then
     echo "[-] Error: Source directory '$SRC' does not exist!" >&2
     exit 1
 fi
 
-# Option 2: Include /boot
-BOOT_CHOICE=$(prompt_read "2. Include /boot directory? (y/N) [Default: N]: " "N")
-case "$BOOT_CHOICE" in
+# Prompt 2: Include /boot
+printf "2. Include /boot directory? (y/N) [Default: N]: "
+if [ -c /dev/tty ]; then
+    read -r INPUT_BOOT < /dev/tty
+else
+    read -r INPUT_BOOT
+fi
+
+case "$INPUT_BOOT" in
     [yY][eE][sS]|[yY])
         INCLUDE_BOOT=1
         BOOT_LABEL="BOOT"
@@ -76,9 +74,15 @@ case "$BOOT_CHOICE" in
         ;;
 esac
 
-# Option 3: Remote Destination (Rclone path)
+# Prompt 3: Remote Destination
 DEFAULT_DEST="LXCsamba:lnvo_Samba/lnvoBkp/LnvoBackup/${OS_TAG}"
-DEST=$(prompt_read "3. Enter Rclone remote path [Default: $DEFAULT_DEST]: " "$DEFAULT_DEST")
+printf "3. Enter Rclone remote path [Default: %s]: " "$DEFAULT_DEST"
+if [ -c /dev/tty ]; then
+    read -r INPUT_DEST < /dev/tty
+else
+    read -r INPUT_DEST
+fi
+DEST="${INPUT_DEST:-$DEFAULT_DEST}"
 
 # Clean destination trailing slash
 DEST_CLEAN=$(echo "$DEST" | sed 's:/*$::')
@@ -94,9 +98,8 @@ echo " Destination:  $TARGET_REMOTE"
 echo "----------------------------"
 echo "Starting direct network compression and stream..."
 
-# --- 5. Generate Exclusion List in /tmp (RAM) ---
+# --- 5. Generate RAM Exclude File ---
 EXCLUDES="/tmp/stream_excludes_$$.txt"
-trap 'rm -f "$EXCLUDES"' EXIT INT TERM
 
 cat << 'EOF' > "$EXCLUDES"
 ./proc/*
@@ -130,6 +133,9 @@ fi
 
 # --- 6. Direct Stream: tar -> rclone rcat ---
 tar --numeric-owner -cpzf - -X "$EXCLUDES" -C "$SRC" . | rclone rcat "$TARGET_REMOTE"
+
+# Cleanup
+rm -f "$EXCLUDES"
 
 echo ""
 echo "------------------------------------------------------------"
