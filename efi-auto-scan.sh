@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Deep-Analyzed Universal UEFI Auto-Recovery Script (Fixed)
+# Interactive Universal UEFI Boot Entry Manager
 if [ "$EUID" -ne 0 ]; then
   echo "[-] Please run as root (use sudo)."
   exit 1
@@ -17,11 +17,9 @@ fi
 ESP_DEV=$(findmnt -no SOURCE "$ESP_MOUNT")
 DEV_NAME=$(basename "$ESP_DEV")
 
-# Read partition number directly from sysfs (100% reliable across all distros)
 if [ -f "/sys/class/block/$DEV_NAME/partition" ]; then
     PART_NUM=$(cat "/sys/class/block/$DEV_NAME/partition")
 else
-    # Fallback for systems without sysfs partition node
     PART_NUM=$(echo "$DEV_NAME" | grep -o '[0-9]*$')
 fi
 
@@ -32,44 +30,59 @@ echo "============================================================"
 echo "[+] Target Drive: $DISK_PATH (Partition $PART_NUM)"
 echo "============================================================"
 
-# Read existing UEFI entries
 CURRENT_NVRAM=$(efibootmgr -v)
-
-# Blacklist of utilities/helpers that are NOT direct OS bootloaders
 EXCLUDE_FILES=("mmx64.efi" "mmia32.efi" "fbx64.efi" "memtest.efi" "memtest86.efi")
 
-# Function to add entry to NVRAM safely using printf (avoids \t and \v mangling)
-register_efi() {
-    local label="$1"
-    local rel_path="$2" # e.g. \EFI\BlissOS\grubx64.efi
+# Interactive registration function
+prompt_and_register() {
+    local default_label="$1"
+    local rel_path="$2"
 
-    # Exact string match (grep -F) prevents backslash/regex collision
+    echo ""
+    echo "------------------------------------------------------------"
+    printf "Detected EFI: \e[36m%s\e[0m\n" "$rel_path"
+
+    # Check if already present in NVRAM
     if echo "$CURRENT_NVRAM" | grep -F -i "$rel_path" > /dev/null; then
-        printf "\e[32m[EXISTS]\e[0m %s (%s)\n" "$label" "$rel_path"
+        printf "Status: \e[32m[ALREADY REGISTERED IN UEFI]\e[0m\n"
+        read -r -p "Do you want to re-add / add another entry for this? [y/N]: " CHOICE < /dev/tty
+        if [[ ! "$CHOICE" =~ ^[Yy]$ ]]; then
+            echo "Skipping..."
+            return
+        fi
     else
-        printf "\e[33m[ADDING]\e[0m %s -> %s\n" "$label" "$rel_path"
-        efibootmgr -c -d "$DISK_PATH" -p "$PART_NUM" -L "$label" -l "$rel_path"
-        # Refresh NVRAM cache
-        CURRENT_NVRAM=$(efibootmgr -v)
+        printf "Status: \e[33m[NOT IN UEFI MENU]\e[0m\n"
+        read -r -p "Add this entry to UEFI boot menu? [Y/n]: " CHOICE < /dev/tty
+        if [[ "$CHOICE" =~ ^[Nn]$ ]]; then
+            echo "Skipping..."
+            return
+        fi
     fi
+
+    # Prompt for label name
+    read -r -p "Enter boot menu label [Default: $default_label]: " CUSTOM_LABEL < /dev/tty
+    FINAL_LABEL="${CUSTOM_LABEL:-$default_label}"
+
+    printf "Registering: \e[32m%s\e[0m -> %s\n" "$FINAL_LABEL" "$rel_path"
+    efibootmgr -c -d "$DISK_PATH" -p "$PART_NUM" -L "$FINAL_LABEL" -l "$rel_path"
+    CURRENT_NVRAM=$(efibootmgr -v)
 }
 
 # 1. SPECIAL CASE: Microsoft Windows
 if [ -f "$ESP_MOUNT/EFI/Microsoft/Boot/bootmgfw.efi" ]; then
-    register_efi "Windows Boot Manager" "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
+    prompt_and_register "Windows Boot Manager" "\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
 fi
 
 # 2. SPECIAL CASE: Ventoy
 if [ -f "$ESP_MOUNT/EFI/ventoy/EFI/BOOT/BOOTX64.EFI" ]; then
-    register_efi "Ventoy" "\\EFI\\ventoy\\EFI\\BOOT\\BOOTX64.EFI"
+    prompt_and_register "Ventoy" "\\EFI\\ventoy\\EFI\\BOOT\\BOOTX64.EFI"
 fi
 
-# 3. DYNAMIC SCAN: Iterate through all directories in /EFI/
+# 3. DYNAMIC SCAN
 for DIR in "$ESP_MOUNT"/EFI/*; do
     [ -d "$DIR" ] || continue
     FOLDER=$(basename "$DIR")
 
-    # Skip handled or firmware-reserved folders
     case "$FOLDER" in
         "Microsoft"|"ventoy"|"Boot"|"Insyde") continue ;;
     esac
@@ -77,7 +90,7 @@ for DIR in "$ESP_MOUNT"/EFI/*; do
     TARGET_FILE=""
     LABEL=""
 
-    # Strategy A: Check for BOOTX64.CSV (strip null bytes \0 from UTF-16LE encoding)
+    # Strategy A: Check BOOTX64.CSV
     if [ -f "$DIR/BOOTX64.CSV" ]; then
         CSV_DATA=$(tr -d '\0\r' < "$DIR/BOOTX64.CSV" | head -n 1)
         CSV_FILE=$(echo "$CSV_DATA" | cut -d',' -f1)
@@ -89,7 +102,7 @@ for DIR in "$ESP_MOUNT"/EFI/*; do
         fi
     fi
 
-    # Strategy B: Prioritize 64-bit loaders for distros without CSV (BlissOS, Arch, etc.)
+    # Strategy B: Prioritize standard 64-bit loaders
     if [ -z "$TARGET_FILE" ]; then
         for CANDIDATE in shimx64.efi grubx64.efi systemd-bootx64.efi loader.efi system.efi android.efi bootx64.efi BOOTx64.EFI boot.efi ipxe.efi; do
             if [ -f "$DIR/$CANDIDATE" ]; then
@@ -99,7 +112,7 @@ for DIR in "$ESP_MOUNT"/EFI/*; do
         done
     fi
 
-    # Strategy C: Fallback to any valid .efi file that is not a helper/tool
+    # Strategy C: First non-excluded .efi file
     if [ -z "$TARGET_FILE" ]; then
         for FILE in "$DIR"/*.efi "$DIR"/*.EFI; do
             [ -f "$FILE" ] || continue
@@ -113,7 +126,6 @@ for DIR in "$ESP_MOUNT"/EFI/*; do
                 fi
             done
 
-            # Skip 32-bit legacy binaries on x86_64
             if [[ "${FNAME,,}" =~ ia32\.efi$ ]]; then
                 IS_EXCLUDED=1
             fi
@@ -125,15 +137,16 @@ for DIR in "$ESP_MOUNT"/EFI/*; do
         done
     fi
 
-    # Register valid bootloaders
     if [ -n "$TARGET_FILE" ]; then
         if [ -z "$LABEL" ]; then
             LABEL="$(tr '[:lower:]' '[:upper:]' <<< ${FOLDER:0:1})${FOLDER:1}"
         fi
-        register_efi "$LABEL" "\\EFI\\$FOLDER\\$TARGET_FILE"
+        prompt_and_register "$LABEL" "\\EFI\\$FOLDER\\$TARGET_FILE"
     fi
 done
 
+echo ""
 echo "============================================================"
-echo "[+] Scan completed successfully."
+echo "[+] Configuration finished. Current UEFI Boot Entries:"
 echo "============================================================"
+efibootmgr
